@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example get_device
-
 use audio::AudioClient;
 use std::io::{self, Write};
 
@@ -24,7 +23,14 @@ async fn main() -> anyhow::Result<()> {
                 "  Description : {}",
                 d.description.as_deref().unwrap_or("-")
             );
-            println!("  Type        : {}", if d.is_output() { "Output (Sink)" } else { "Input (Source)" });
+            println!(
+                "  Type        : {}",
+                if d.is_output() {
+                    "Output (Sink)"
+                } else {
+                    "Input (Source)"
+                }
+            );
             println!("  Volume      : {:.0}%", d.volume * 100.0);
             println!("  Muted       : {}", d.muted);
             println!("  Default     : {}", d.is_default);

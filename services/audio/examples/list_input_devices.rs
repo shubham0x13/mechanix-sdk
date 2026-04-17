@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example list_input_devices
-
 use audio::AudioClient;
 
 #[tokio::main]
@@ -17,12 +16,12 @@ async fn main() -> anyhow::Result<()> {
     for d in &devices {
         println!(
             "  [{id}] {name}{default}\n       {desc}\n       volume: {vol:.0}%  muted: {mute}\n",
-            id      = d.id,
-            name    = d.name,
+            id = d.id,
+            name = d.name,
             default = if d.is_default { "  ← default" } else { "" },
-            desc    = d.description.as_deref().unwrap_or("(no description)"),
-            vol     = d.volume * 100.0,
-            mute    = d.muted,
+            desc = d.description.as_deref().unwrap_or("(no description)"),
+            vol = d.volume * 100.0,
+            mute = d.muted,
         );
     }
 

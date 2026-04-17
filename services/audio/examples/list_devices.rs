@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example list_devices
-
 use audio::AudioClient;
 
 #[tokio::main]
@@ -40,11 +39,19 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if let Ok(dev) = client.default_output_device() {
-        println!("\nDefault output: {} (vol {:.0}%)", dev.name, dev.volume * 100.0);
+        println!(
+            "\nDefault output: {} (vol {:.0}%)",
+            dev.name,
+            dev.volume * 100.0
+        );
     }
 
     if let Ok(dev) = client.default_input_device() {
-        println!("Default input:  {} (vol {:.0}%)", dev.name, dev.volume * 100.0);
+        println!(
+            "Default input:  {} (vol {:.0}%)",
+            dev.name,
+            dev.volume * 100.0
+        );
     }
 
     Ok(())

@@ -1,9 +1,4 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use parking_lot::RwLock;
 
@@ -15,10 +10,7 @@ use pipewire::{
     proxy::Listener,
     spa::{
         param::ParamType,
-        pod::{
-            serialize::PodSerializer,
-            Object, Pod, Property, PropertyFlags, Value, ValueArray,
-        },
+        pod::{Object, Pod, Property, PropertyFlags, Value, ValueArray, serialize::PodSerializer},
     },
     types::ObjectType,
 };
@@ -115,8 +107,7 @@ impl AudioClient {
         let state_clone = Arc::clone(&state);
 
         let (cmd_tx, cmd_rx) = channel::channel::<Command>();
-        let (ready_tx, ready_rx) =
-            std::sync::mpsc::sync_channel::<Result<(), AudioError>>(1);
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<Result<(), AudioError>>(1);
 
         std::thread::Builder::new()
             .name("mechanix-pw".into())
@@ -150,12 +141,18 @@ impl AudioClient {
 
     // Output devices only
     pub fn list_output_devices(&self) -> Vec<AudioDevice> {
-        self.list_devices().into_iter().filter(|d| d.is_output()).collect()
+        self.list_devices()
+            .into_iter()
+            .filter(|d| d.is_output())
+            .collect()
     }
 
     // Input devices only
     pub fn list_input_devices(&self) -> Vec<AudioDevice> {
-        self.list_devices().into_iter().filter(|d| d.is_input()).collect()
+        self.list_devices()
+            .into_iter()
+            .filter(|d| d.is_input())
+            .collect()
     }
 
     // Get device by ID or name
@@ -207,11 +204,7 @@ impl AudioClient {
     // Mutations
 
     // Set volume [0.0, 1.0]
-    pub async fn set_volume(
-        &self,
-        id_or_name: &str,
-        volume: f32,
-    ) -> Result<(), AudioError> {
+    pub async fn set_volume(&self, id_or_name: &str, volume: f32) -> Result<(), AudioError> {
         let volume = volume.clamp(0.0, 1.0);
         let device = self
             .get_device(id_or_name)
@@ -294,11 +287,7 @@ impl AudioClient {
     }
 
     // Set mute state
-    pub async fn set_mute(
-        &self,
-        id_or_name: &str,
-        muted: bool,
-    ) -> Result<(), AudioError> {
+    pub async fn set_mute(&self, id_or_name: &str, muted: bool) -> Result<(), AudioError> {
         let device = self
             .get_device(id_or_name)
             .ok_or_else(|| AudioError::DeviceNotFound(id_or_name.into()))?;
@@ -464,11 +453,8 @@ fn pw_thread(
                 }
 
                 ObjectType::Metadata => {
-                    let is_default = obj
-                        .props
-                        .as_ref()
-                        .and_then(|p| p.get("metadata.name"))
-                        == Some("default");
+                    let is_default =
+                        obj.props.as_ref().and_then(|p| p.get("metadata.name")) == Some("default");
                     if !is_default {
                         return;
                     }
@@ -487,16 +473,14 @@ fn pw_thread(
                         .property(move |_subject, key, _type_, value| {
                             match key {
                                 Some("default.audio.sink") => {
-                                    let name = value
-                                        .and_then(|v| {
-                                            // JSON is like {"name":"..."}
-                                            extract_name_from_json(v)
-                                        });
+                                    let name = value.and_then(|v| {
+                                        // JSON is like {"name":"..."}
+                                        extract_name_from_json(v)
+                                    });
                                     state_meta.write().default_sink = name;
                                 }
                                 Some("default.audio.source") => {
-                                    let name = value
-                                        .and_then(|v| extract_name_from_json(v));
+                                    let name = value.and_then(|v| extract_name_from_json(v));
                                     state_meta.write().default_source = name;
                                 }
                                 _ => {}
@@ -529,97 +513,95 @@ fn pw_thread(
     let ml_weak = main_loop.downgrade();
     let proxies_cmd = Rc::clone(&proxies);
 
-    let _cmd_attached = cmd_rx.attach(main_loop.loop_(), move |cmd| {
-        match cmd {
-            Command::SetVolume {
-                node_id,
-                channels,
-                volume,
-                reply,
-            } => {
-                let proxies = proxies_cmd.borrow();
-                let result = match proxies.nodes.get(&node_id) {
-                    Some((node, _)) => {
-                        let pod_bytes = build_volume_pod(channels, volume);
-                        let pod = unsafe { Pod::from_raw(pod_bytes.as_ptr().cast()) };
-                        node.set_param(ParamType::Props, 0, pod);
-                        Ok(())
-                    }
-                    None => Err(AudioError::SetVolumeFailed {
-                        device: node_id.to_string(),
-                        reason: "node not found in proxy table".into(),
-                    }),
-                };
-                let _ = reply.send(result);
-            }
-
-            Command::SetMute {
-                node_id,
-                muted,
-                reply,
-            } => {
-                let proxies = proxies_cmd.borrow();
-                let result = match proxies.nodes.get(&node_id) {
-                    Some((node, _)) => {
-                        let pod_bytes = build_mute_pod(muted);
-                        let pod = unsafe { Pod::from_raw(pod_bytes.as_ptr().cast()) };
-                        node.set_param(ParamType::Props, 0, pod);
-                        Ok(())
-                    }
-                    None => Err(AudioError::SetMuteFailed {
-                        device: node_id.to_string(),
-                        reason: "node not found in proxy table".into(),
-                    }),
-                };
-                let _ = reply.send(result);
-            }
-
-            Command::SetDefaultOutput { node_name, reply } => {
-                let proxies = proxies_cmd.borrow();
-                let result = match proxies.metadata.first() {
-                    Some((meta, _)) => {
-                        let value = format!("{{\"name\":\"{node_name}\"}}");
-                        meta.set_property(
-                            0,
-                            "default.audio.sink",
-                            Some("Spa:String:JSON"),
-                            Some(&value),
-                        );
-                        Ok(())
-                    }
-                    None => Err(AudioError::SetDefaultFailed {
-                        direction: "output".into(),
-                        reason: "no default metadata object found".into(),
-                    }),
-                };
-                let _ = reply.send(result);
-            }
-
-            Command::SetDefaultInput { node_name, reply } => {
-                let proxies = proxies_cmd.borrow();
-                let result = match proxies.metadata.first() {
-                    Some((meta, _)) => {
-                        let value = format!("{{\"name\":\"{node_name}\"}}");
-                        meta.set_property(
-                            0,
-                            "default.audio.source",
-                            Some("Spa:String:JSON"),
-                            Some(&value),
-                        );
-                        Ok(())
-                    }
-                    None => Err(AudioError::SetDefaultFailed {
-                        direction: "input".into(),
-                        reason: "no default metadata object found".into(),
-                    }),
-                };
-                let _ = reply.send(result);
-            }
-
-            Command::Quit => {
-                if let Some(ml) = ml_weak.upgrade() {
-                    ml.quit();
+    let _cmd_attached = cmd_rx.attach(main_loop.loop_(), move |cmd| match cmd {
+        Command::SetVolume {
+            node_id,
+            channels,
+            volume,
+            reply,
+        } => {
+            let proxies = proxies_cmd.borrow();
+            let result = match proxies.nodes.get(&node_id) {
+                Some((node, _)) => {
+                    let pod_bytes = build_volume_pod(channels, volume);
+                    let pod = unsafe { Pod::from_raw(pod_bytes.as_ptr().cast()) };
+                    node.set_param(ParamType::Props, 0, pod);
+                    Ok(())
                 }
+                None => Err(AudioError::SetVolumeFailed {
+                    device: node_id.to_string(),
+                    reason: "node not found in proxy table".into(),
+                }),
+            };
+            let _ = reply.send(result);
+        }
+
+        Command::SetMute {
+            node_id,
+            muted,
+            reply,
+        } => {
+            let proxies = proxies_cmd.borrow();
+            let result = match proxies.nodes.get(&node_id) {
+                Some((node, _)) => {
+                    let pod_bytes = build_mute_pod(muted);
+                    let pod = unsafe { Pod::from_raw(pod_bytes.as_ptr().cast()) };
+                    node.set_param(ParamType::Props, 0, pod);
+                    Ok(())
+                }
+                None => Err(AudioError::SetMuteFailed {
+                    device: node_id.to_string(),
+                    reason: "node not found in proxy table".into(),
+                }),
+            };
+            let _ = reply.send(result);
+        }
+
+        Command::SetDefaultOutput { node_name, reply } => {
+            let proxies = proxies_cmd.borrow();
+            let result = match proxies.metadata.first() {
+                Some((meta, _)) => {
+                    let value = format!("{{\"name\":\"{node_name}\"}}");
+                    meta.set_property(
+                        0,
+                        "default.audio.sink",
+                        Some("Spa:String:JSON"),
+                        Some(&value),
+                    );
+                    Ok(())
+                }
+                None => Err(AudioError::SetDefaultFailed {
+                    direction: "output".into(),
+                    reason: "no default metadata object found".into(),
+                }),
+            };
+            let _ = reply.send(result);
+        }
+
+        Command::SetDefaultInput { node_name, reply } => {
+            let proxies = proxies_cmd.borrow();
+            let result = match proxies.metadata.first() {
+                Some((meta, _)) => {
+                    let value = format!("{{\"name\":\"{node_name}\"}}");
+                    meta.set_property(
+                        0,
+                        "default.audio.source",
+                        Some("Spa:String:JSON"),
+                        Some(&value),
+                    );
+                    Ok(())
+                }
+                None => Err(AudioError::SetDefaultFailed {
+                    direction: "input".into(),
+                    reason: "no default metadata object found".into(),
+                }),
+            };
+            let _ = reply.send(result);
+        }
+
+        Command::Quit => {
+            if let Some(ml) = ml_weak.upgrade() {
+                ml.quit();
             }
         }
     });
@@ -723,7 +705,7 @@ fn build_mute_pod(muted: bool) -> Vec<u8> {
 }
 
 // Extract 'name' from PW metadata JSON
-fn extract_name_from_json(value: &str) -> Option<String> {    
+fn extract_name_from_json(value: &str) -> Option<String> {
     let trimmed = value.trim();
     let inner = trimmed.strip_prefix('{')?.strip_suffix('}')?;
     for part in inner.split(',') {

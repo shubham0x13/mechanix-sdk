@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example mute
-
 use audio::AudioClient;
 use std::io::{self, Write};
 
@@ -21,7 +20,10 @@ async fn main() -> anyhow::Result<()> {
             query,
             if muted { "muted" } else { "not muted" }
         ),
-        Err(e) => { println!("Error: {e}"); return Ok(()); }
+        Err(e) => {
+            println!("Error: {e}");
+            return Ok(());
+        }
     }
 
     print!("Set mute? (y = mute, n = unmute, Enter = keep): ");
@@ -30,9 +32,12 @@ async fn main() -> anyhow::Result<()> {
     io::stdin().read_line(&mut yn)?;
 
     let muted = match yn.trim().to_lowercase().as_str() {
-        "y" | "yes" | "1" | "true"  => true,
-        "n" | "no"  | "0" | "false" => false,
-        "" => { println!("Mute state unchanged."); return Ok(()); }
+        "y" | "yes" | "1" | "true" => true,
+        "n" | "no" | "0" | "false" => false,
+        "" => {
+            println!("Mute state unchanged.");
+            return Ok(());
+        }
         other => {
             println!("Unrecognised input '{other}', expected y or n.");
             return Ok(());
@@ -40,7 +45,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match client.set_mute(&query, muted).await {
-        Ok(()) => println!("'{}' is now {}.", query, if muted { "muted" } else { "unmuted" }),
+        Ok(()) => println!(
+            "'{}' is now {}.",
+            query,
+            if muted { "muted" } else { "unmuted" }
+        ),
         Err(e) => println!("Error: {e}"),
     }
 

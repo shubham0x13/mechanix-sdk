@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example set_default_device
-
 use audio::AudioClient;
 use std::io::{self, Write};
 
@@ -10,11 +9,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Show current defaults.
     match client.default_output_device() {
-        Ok(d)  => println!("Current default output: [{}] {}", d.id, d.name),
+        Ok(d) => println!("Current default output: [{}] {}", d.id, d.name),
         Err(e) => println!("Current default output: {e}"),
     }
     match client.default_input_device() {
-        Ok(d)  => println!("Current default input:  [{}] {}", d.id, d.name),
+        Ok(d) => println!("Current default input:  [{}] {}", d.id, d.name),
         Err(e) => println!("Current default input:  {e}"),
     }
     println!();
@@ -27,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     let is_output = match dir_input.trim().to_lowercase().as_str() {
         "o" | "out" | "output" => true,
-        "i" | "in"  | "input"  => false,
+        "i" | "in" | "input" => false,
         other => {
             println!("Unrecognised choice '{other}', expected o or i.");
             return Ok(());
@@ -42,14 +41,21 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if devices.is_empty() {
-        println!("No {} devices found.", if is_output { "output" } else { "input" });
+        println!(
+            "No {} devices found.",
+            if is_output { "output" } else { "input" }
+        );
         return Ok(());
     }
 
-    println!("\nAvailable {} devices:", if is_output { "output" } else { "input" });
+    println!(
+        "\nAvailable {} devices:",
+        if is_output { "output" } else { "input" }
+    );
     for d in &devices {
-        println!("  [{id}] {name}  —  {desc}",
-            id   = d.id,
+        println!(
+            "  [{id}] {name}  —  {desc}",
+            id = d.id,
             name = d.name,
             desc = d.description.as_deref().unwrap_or("-"),
         );
@@ -69,7 +75,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match result {
-        Ok(()) => println!("Default {} device set to '{query}'.", if is_output { "output" } else { "input" }),
+        Ok(()) => println!(
+            "Default {} device set to '{query}'.",
+            if is_output { "output" } else { "input" }
+        ),
         Err(e) => println!("Error: {e}"),
     }
 

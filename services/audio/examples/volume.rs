@@ -1,5 +1,4 @@
 ///   cargo run -p audio --example volume
-
 use audio::AudioClient;
 use std::io::{self, Write};
 
@@ -17,7 +16,10 @@ async fn main() -> anyhow::Result<()> {
     // Show current volume.
     match client.volume(&query) {
         Ok(vol) => println!("Current volume of '{}': {:.0}%", query, vol * 100.0),
-        Err(e)  => { println!("Error: {e}"); return Ok(()); }
+        Err(e) => {
+            println!("Error: {e}");
+            return Ok(());
+        }
     }
 
     print!("New volume (0–100, or press Enter to keep): ");
@@ -32,12 +34,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match trimmed.parse::<f32>() {
-        Ok(percent) => {
-            match client.set_volume(&query, percent / 100.0).await {
-                Ok(()) => println!("Volume of '{}' set to {:.0}%.", query, percent.clamp(0.0, 100.0)),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
+        Ok(percent) => match client.set_volume(&query, percent / 100.0).await {
+            Ok(()) => println!(
+                "Volume of '{}' set to {:.0}%.",
+                query,
+                percent.clamp(0.0, 100.0)
+            ),
+            Err(e) => println!("Error: {e}"),
+        },
         Err(_) => println!("Invalid number '{trimmed}', volume unchanged."),
     }
 
