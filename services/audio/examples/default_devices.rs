@@ -1,6 +1,6 @@
 ///   cargo run -p audio --example default_devices
 
-use mechanix_audio::AudioClient;
+use audio::AudioClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

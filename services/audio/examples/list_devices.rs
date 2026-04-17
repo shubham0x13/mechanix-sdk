@@ -1,11 +1,11 @@
 ///   cargo run -p audio --example list_devices
 
-use mechanix_audio::AudioClient;
+use audio::AudioClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter("mechanix_audio=debug")
+        .with_env_filter("audio=debug")
         .init();
 
     let client = AudioClient::new()?;

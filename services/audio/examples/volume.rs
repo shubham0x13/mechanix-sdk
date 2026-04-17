@@ -1,6 +1,6 @@
 ///   cargo run -p audio --example volume
 
-use mechanix_audio::AudioClient;
+use audio::AudioClient;
 use std::io::{self, Write};
 
 #[tokio::main]

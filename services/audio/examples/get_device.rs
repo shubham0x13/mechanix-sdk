@@ -1,6 +1,6 @@
 ///   cargo run -p audio --example get_device
 
-use mechanix_audio::AudioClient;
+use audio::AudioClient;
 use std::io::{self, Write};
 
 #[tokio::main]
