@@ -231,12 +231,9 @@ dependencies = [
 name = "bluetooth"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "futures",
  "thiserror",
  "tokio",
- "tracing",
- "tracing-subscriber",
  "zbus",
 ]
 
@@ -739,12 +736,6 @@ dependencies = [
 [[package]]
 name = "network-manager"
 version = "0.1.0"
-dependencies = [
- "thiserror",
- "tokio",
- "tracing",
- "zbus",
-]
 
 [[package]]
 name = "nix"

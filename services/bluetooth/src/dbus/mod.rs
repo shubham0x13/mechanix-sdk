@@ -2,7 +2,12 @@
 #![allow(missing_docs)]
 #![allow(unused)]
 
-pub mod adapter1;
-pub mod agent_manager1;
-pub mod battery1;
-pub mod device1;
+mod adapter1;
+mod agent_manager1;
+mod battery1;
+mod device1;
+
+pub use adapter1::{Adapter1Proxy, Adapter1ProxyBlocking};
+pub use agent_manager1::AgentManager1Proxy;
+pub use battery1::Battery1Proxy;
+pub use device1::Device1Proxy;

@@ -16,7 +16,7 @@ use crate::{
     AdapterInfo, DeviceInfo,
     adapter::Adapter,
     agent::{AgentCapability, BluezAgent, PairingRequest},
-    dbus::agent_manager1::AgentManager1Proxy,
+    dbus::AgentManager1Proxy,
     device::Device,
     error::BluetoothError,
     events::BluetoothEvent,
@@ -37,13 +37,13 @@ static NEXT_AGENT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// The root client for interacting with the BlueZ Bluetooth stack.
 #[derive(Clone)]
-pub struct Bluetooth {
+pub struct BluetoothManager {
     connection: Connection,
     // We store the sender so we can create new receivers anytime
     event_tx: broadcast::Sender<BluetoothEvent>,
 }
 
-impl Bluetooth {
+impl BluetoothManager {
     /// Establishes a connection to the system D-Bus and spawns the global event bus.
     pub async fn new() -> Result<Self, BluetoothError> {
         let connection = Connection::system().await?;
@@ -279,21 +279,21 @@ impl Bluetooth {
             IFACE_ADAPTER => {
                 let adapter_name = path.split('/').next_back().unwrap_or("unknown").to_string();
 
-                if let Some(val) = changed_props.get("Powered") {
-                    if let Ok(powered) = bool::try_from(val) {
-                        let _ = tx.send(BluetoothEvent::AdapterPowerChanged {
-                            adapter_name: adapter_name.clone(),
-                            powered,
-                        });
-                    }
+                if let Some(val) = changed_props.get("Powered")
+                    && let Ok(powered) = bool::try_from(val)
+                {
+                    let _ = tx.send(BluetoothEvent::AdapterPowerChanged {
+                        adapter_name: adapter_name.clone(),
+                        powered,
+                    });
                 }
-                if let Some(val) = changed_props.get("Discovering") {
-                    if let Ok(discovering) = bool::try_from(val) {
-                        let _ = tx.send(BluetoothEvent::DiscoveryStateChanged {
-                            adapter_name,
-                            discovering,
-                        });
-                    }
+                if let Some(val) = changed_props.get("Discovering")
+                    && let Ok(discovering) = bool::try_from(val)
+                {
+                    let _ = tx.send(BluetoothEvent::DiscoveryStateChanged {
+                        adapter_name,
+                        discovering,
+                    });
                 }
             }
             IFACE_DEVICE => {

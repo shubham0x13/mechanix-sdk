@@ -1,6 +1,6 @@
 use zbus::{Connection, zvariant::ObjectPath};
 
-use crate::{dbus::adapter1::Adapter1Proxy, error::BluetoothError};
+use crate::{dbus::Adapter1Proxy, error::BluetoothError};
 
 /// Represents a local Bluetooth adapter (e.g., "hci0") and controls radio functions.
 pub struct Adapter {

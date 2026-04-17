@@ -1,18 +1,13 @@
 [package]
 name = "bluetooth"
-description = "Bluetooth peripheral interface for Mechanix SDK"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+repository.workspace = true
 license.workspace = true
 
 [dependencies]
-tokio = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
 zbus = { workspace = true }
+tokio = { workspace = true }
 futures = { workspace = true }
-
-[dev-dependencies]
-anyhow = { workspace = true }
-tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }

@@ -1,7 +1,7 @@
 use zbus::Connection;
 
 use crate::{
-    dbus::{battery1::Battery1Proxy, device1::Device1Proxy},
+    dbus::{Battery1Proxy, Device1Proxy},
     error::BluetoothError,
 };
 

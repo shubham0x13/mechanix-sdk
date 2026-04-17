@@ -1,25 +1,22 @@
 [workspace]
 resolver = "2"
-members = [
-    "services/audio",
-    "services/bluetooth",
-    "services/network-manager",
-]
+members = ["services/audio", "services/bluetooth", "services/network-manager"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 authors = ["Dhruveshb", "Shubham Patel"]
-license = "MIT"
 repository = "https://github.com/mecha-org/mechanix-sdk"
+license = "MIT"
 
 [workspace.dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.52.0", features = ["full"] }
 thiserror = "2.0.18"
+zbus = "5.14.0"
+futures = "0.3.32"
+uuid = { version = "1.18.1", features = ["v4"] }
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pipewire = "0.9.2"
 parking_lot = "0.12"
-zbus = "5.14.0"
-futures = "0.3.32"
