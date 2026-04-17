@@ -22,7 +22,7 @@ When you create an `AudioClient`, it spawns a dedicated thread (`mechanix-pw`). 
 
 ### Listing Devices
 ```rust
-use mechanix_audio::AudioClient;
+use audio::AudioClient;
 
 let client = AudioClient::new()?;
 
