@@ -39,7 +39,6 @@ static NEXT_AGENT_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 pub struct BluetoothManager {
     connection: Connection,
-    // We store the sender so we can create new receivers anytime
     event_tx: broadcast::Sender<BluetoothEvent>,
 }
 

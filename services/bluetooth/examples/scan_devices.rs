@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         if let BluetoothEvent::DeviceDiscovered(info) = event {
-            discovered.insert(info.path.clone(), info.display_name());
+            discovered.insert(info.path.clone(), info.display_name().to_string());
             println!(
                 "Discovered: {} ({}) -> {}",
                 info.display_name(),

@@ -231,6 +231,7 @@ dependencies = [
 name = "bluetooth"
 version = "0.1.0"
 dependencies = [
+ "common",
  "futures",
  "thiserror",
  "tokio",
@@ -299,6 +300,13 @@ dependencies = [
  "glob",
  "libc",
  "libloading",
+]
+
+[[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "zbus",
 ]
 
 [[package]]

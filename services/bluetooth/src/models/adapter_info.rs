@@ -1,6 +1,5 @@
-use super::{extract_bool, extract_string};
-use std::collections::HashMap;
-use zbus::zvariant::OwnedValue;
+use crate::DbusProperties;
+use common::{extract_bool, extract_string};
 
 #[derive(Debug, Clone)]
 pub struct AdapterInfo {
@@ -16,7 +15,7 @@ pub struct AdapterInfo {
 }
 
 impl AdapterInfo {
-    pub(crate) fn from_properties(path: String, props: &HashMap<String, OwnedValue>) -> Self {
+    pub(crate) fn from_properties(path: String, props: &DbusProperties) -> Self {
         let name = path.split('/').next_back().unwrap_or("unknown").to_string();
         Self {
             path,

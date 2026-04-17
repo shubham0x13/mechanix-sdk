@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["services/audio", "services/bluetooth", "services/network-manager"]
+members = [
+    "services/common",
+    "services/audio",
+    "services/bluetooth",
+    "services/network-manager",
+]
 
 [workspace.package]
 version = "0.1.0"

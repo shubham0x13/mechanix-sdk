@@ -13,3 +13,8 @@ pub use device::Device;
 pub use error::BluetoothError;
 pub use events::BluetoothEvent;
 pub use models::{adapter_info::AdapterInfo, device_info::DeviceInfo};
+
+use std::collections::HashMap;
+use zbus::zvariant::OwnedValue;
+
+pub type DbusProperties = HashMap<String, OwnedValue>;

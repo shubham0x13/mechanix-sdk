@@ -1,6 +1,5 @@
-use super::{extract_bool, extract_i16, extract_string, extract_u32};
-use std::collections::HashMap;
-use zbus::zvariant::OwnedValue;
+use crate::DbusProperties;
+use common::{extract_bool, extract_i16, extract_string, extract_u32};
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -20,7 +19,7 @@ pub struct DeviceInfo {
 }
 
 impl DeviceInfo {
-    pub(crate) fn from_properties(path: String, props: &HashMap<String, OwnedValue>) -> Self {
+    pub(crate) fn from_properties(path: String, props: &DbusProperties) -> Self {
         Self {
             path,
             name: extract_string(props, "Name"),
@@ -38,13 +37,13 @@ impl DeviceInfo {
         }
     }
 
-    pub fn display_name(&self) -> String {
+    pub fn display_name(&self) -> &str {
         if !self.alias.is_empty() {
-            self.alias.clone()
+            &self.alias
         } else if let Some(name) = &self.name {
-            name.clone()
+            name
         } else {
-            self.address.clone()
+            &self.address
         }
     }
 }
