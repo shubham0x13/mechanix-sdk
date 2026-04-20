@@ -1,5 +1,5 @@
 use crate::DbusProperties;
-use common::{extract_bool, extract_i16, extract_string, extract_u32};
+use common::ValueMapExt;
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -22,18 +22,18 @@ impl DeviceInfo {
     pub(crate) fn from_properties(path: String, props: &DbusProperties) -> Self {
         Self {
             path,
-            name: extract_string(props, "Name"),
-            alias: extract_string(props, "Alias").unwrap_or_default(),
-            address: extract_string(props, "Address").unwrap_or_default(),
-            icon: extract_string(props, "Icon"),
-            paired: extract_bool(props, "Paired").unwrap_or(false),
-            connected: extract_bool(props, "Connected").unwrap_or(false),
-            trusted: extract_bool(props, "Trusted").unwrap_or(false),
-            blocked: extract_bool(props, "Blocked").unwrap_or(false),
-            wake_allowed: extract_bool(props, "WakeAllowed").unwrap_or(false),
-            services_resolved: extract_bool(props, "ServicesResolved").unwrap_or(false),
-            rssi: extract_i16(props, "RSSI"),
-            battery_percentage: extract_u32(props, "BatteryPercentage").map(|v| v as u8),
+            name: props.get_string("Name"),
+            alias: props.get_string_or_default("Alias"),
+            address: props.get_string_or_default("Address"),
+            icon: props.get_string("Icon"),
+            paired: props.get_as_or_default("Paired"),
+            connected: props.get_as_or_default("Connected"),
+            trusted: props.get_as_or_default("Trusted"),
+            blocked: props.get_as_or_default("Blocked"),
+            wake_allowed: props.get_as_or_default("WakeAllowed"),
+            services_resolved: props.get_as_or_default("ServicesResolved"),
+            rssi: props.get_as("RSSI"),
+            battery_percentage: props.get_as("BatteryPercentage"),
         }
     }
 

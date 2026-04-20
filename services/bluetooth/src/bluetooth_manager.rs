@@ -8,7 +8,9 @@ use tokio::{
     time::{Duration, sleep},
 };
 use zbus::{
-    Connection, MatchRule, MessageStream, fdo::ObjectManagerProxy, message::Type,
+    Connection, MatchRule, MessageStream,
+    fdo::{ManagedObjects, ObjectManagerProxy},
+    message::Type,
     zvariant::OwnedValue,
 };
 
@@ -57,6 +59,14 @@ impl BluetoothManager {
         Ok(client)
     }
 
+    async fn object_manager(&self) -> Result<ObjectManagerProxy<'_>, BluetoothError> {
+        Ok(ObjectManagerProxy::new(&self.connection, BLUEZ_DEST, BLUEZ_PATH).await?)
+    }
+
+    async fn managed_objects(&self) -> Result<ManagedObjects, BluetoothError> {
+        Ok(self.object_manager().await?.get_managed_objects().await?)
+    }
+
     /// Returns an `Adapter` struct to control a specific radio.
     pub fn adapter(&self, name: &str) -> Adapter {
         Adapter::new(self.connection.clone(), name)
@@ -69,10 +79,7 @@ impl BluetoothManager {
 
     /// Retrieves a list of all available Bluetooth adapters (e.g., ["hci0", "hci1"]).
     pub async fn get_adapters(&self) -> Result<Vec<AdapterInfo>, BluetoothError> {
-        let object_manager =
-            ObjectManagerProxy::new(&self.connection, BLUEZ_DEST, BLUEZ_PATH).await?;
-
-        let managed_objects = object_manager.get_managed_objects().await?;
+        let managed_objects = self.managed_objects().await?;
         let adapters = managed_objects
             .into_iter()
             .filter_map(|(path, interfaces)| {
@@ -87,10 +94,7 @@ impl BluetoothManager {
 
     /// Retrieves a snapshot of all devices currently cached by the BlueZ daemon.
     pub async fn get_devices(&self) -> Result<Vec<DeviceInfo>, BluetoothError> {
-        let object_manager =
-            ObjectManagerProxy::new(&self.connection, BLUEZ_DEST, BLUEZ_PATH).await?;
-
-        let managed_objects = object_manager.get_managed_objects().await?;
+        let managed_objects = self.managed_objects().await?;
         let devices = managed_objects
             .into_iter()
             .filter_map(|(path, interfaces)| {
@@ -103,13 +107,32 @@ impl BluetoothManager {
         Ok(devices)
     }
 
+    pub async fn get_default_adapter(&self) -> Result<Option<AdapterInfo>, BluetoothError> {
+        let mut adapters = self.get_adapters().await?;
+
+        if adapters.is_empty() {
+            return Ok(None);
+        }
+
+        // Sort them alphabetically by path so "/org/bluez/hci0" usually comes
+        // before "/org/bluez/hci1", ensuring deterministic behavior.
+        adapters.sort_by(|a, b| a.path.cmp(&b.path));
+
+        // Find the first adapter that is actively powered on.
+        if let Some(powered_adapter) = adapters.iter().find(|a| a.powered) {
+            return Ok(Some(powered_adapter.clone()));
+        }
+
+        // If everything is turned off, just return the first one (usually hci0).
+        Ok(adapters.into_iter().next())
+    }
+
     /// Subscribes to the global event bus. Receives all adapter and device state changes.
     pub fn subscribe(&self) -> broadcast::Receiver<BluetoothEvent> {
         self.event_tx.subscribe()
     }
 
     /// Registers this application as the Bluetooth pairing agent.
-    /// The SDK must hold onto the returned Receiver and route events to the UI.
     pub async fn register_agent(&self) -> Result<mpsc::Receiver<PairingRequest>, BluetoothError> {
         let (_path, rx) = self
             .register_agent_with_options(AgentCapability::KeyboardDisplay, true)

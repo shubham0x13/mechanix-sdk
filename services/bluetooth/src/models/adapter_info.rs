@@ -1,5 +1,5 @@
 use crate::DbusProperties;
-use common::{extract_bool, extract_string};
+use common::ValueMapExt;
 
 #[derive(Debug, Clone)]
 pub struct AdapterInfo {
@@ -20,13 +20,13 @@ impl AdapterInfo {
         Self {
             path,
             name,
-            alias: extract_string(props, "Alias").unwrap_or_default(),
-            address: extract_string(props, "Address").unwrap_or_default(),
-            powered: extract_bool(props, "Powered").unwrap_or(false),
-            discoverable: extract_bool(props, "Discoverable").unwrap_or(false),
-            pairable: extract_bool(props, "Pairable").unwrap_or(false),
-            connectable: extract_bool(props, "Connectable").unwrap_or(false),
-            discovering: extract_bool(props, "Discovering").unwrap_or(false),
+            alias: props.get_string_or_default("Alias"),
+            address: props.get_string_or_default("Address"),
+            powered: props.get_as_or_default("Powered"),
+            discoverable: props.get_as_or_default("Discoverable"),
+            pairable: props.get_as_or_default("Pairable"),
+            connectable: props.get_as_or_default("Connectable"),
+            discovering: props.get_as_or_default("Discovering"),
         }
     }
 

@@ -3,22 +3,64 @@ use zbus::zvariant::OwnedValue;
 
 pub type ValueMap = HashMap<String, OwnedValue>;
 
-// ---------- Public Extraction Helpers ----------
+/// Extension trait for extracting strongly-typed values from a D-Bus dictionary.
+pub trait ValueMapExt {
+    /// Extracts a value of type `T`, returning `None` if missing or if the type mismatches.
+    fn get_as<'a, T>(&'a self, key: &str) -> Option<T>
+    where
+        T: TryFrom<&'a OwnedValue>;
 
-pub fn extract_i16(props: &ValueMap, key: &str) -> Option<i16> {
-    props.get(key).and_then(|v| i16::try_from(v).ok())
+    /// Extracts a value, returning the provided `default` if missing or invalid.
+    fn get_as_or<'a, T>(&'a self, key: &str, default: T) -> T
+    where
+        T: TryFrom<&'a OwnedValue>;
+
+    /// Extracts a value, returning `T::default()` if missing or invalid.
+    fn get_as_or_default<'a, T>(&'a self, key: &str) -> T
+    where
+        T: TryFrom<&'a OwnedValue> + Default;
+
+    /// Convenience method for extracting an owned `String`.
+    fn get_string(&self, key: &str) -> Option<String>;
+
+    /// Convenience method for extracting an owned `String` with a fallback.
+    fn get_string_or(&self, key: &str, default: &str) -> String;
+
+    /// Convenience method for extracting an owned `String` with an empty string fallback.
+    fn get_string_or_default(&self, key: &str) -> String;
 }
 
-pub fn extract_u32(props: &ValueMap, key: &str) -> Option<u32> {
-    props.get(key).and_then(|v| u32::try_from(v).ok())
-}
+impl ValueMapExt for ValueMap {
+    fn get_as<'a, T>(&'a self, key: &str) -> Option<T>
+    where
+        T: TryFrom<&'a OwnedValue>,
+    {
+        self.get(key).and_then(|v| T::try_from(v).ok())
+    }
 
-pub fn extract_bool(props: &ValueMap, key: &str) -> Option<bool> {
-    props.get(key).and_then(|v| bool::try_from(v).ok())
-}
+    fn get_as_or<'a, T>(&'a self, key: &str, default: T) -> T
+    where
+        T: TryFrom<&'a OwnedValue>,
+    {
+        self.get_as::<T>(key).unwrap_or(default)
+    }
 
-pub fn extract_string(props: &ValueMap, key: &str) -> Option<String> {
-    props
-        .get(key)
-        .and_then(|v| <&str>::try_from(v).ok().map(String::from))
+    fn get_as_or_default<'a, T>(&'a self, key: &str) -> T
+    where
+        T: TryFrom<&'a OwnedValue> + Default,
+    {
+        self.get_as::<T>(key).unwrap_or_default()
+    }
+
+    fn get_string(&self, key: &str) -> Option<String> {
+        self.get_as::<&str>(key).map(String::from)
+    }
+
+    fn get_string_or(&self, key: &str, default: &str) -> String {
+        self.get_string(key).unwrap_or_else(|| default.to_owned())
+    }
+
+    fn get_string_or_default(&self, key: &str) -> String {
+        self.get_string(key).unwrap_or_default()
+    }
 }
