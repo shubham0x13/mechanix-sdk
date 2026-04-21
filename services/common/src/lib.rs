@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 
-pub type ValueMap = HashMap<String, OwnedValue>;
+/// Represents a standard D-Bus dictionary (a{sv})
+pub type VariantDict = HashMap<String, OwnedValue>;
+
+/// Represents a nested D-Bus dictionary (a{sa{sv}})
+pub type NestedVariantDict = HashMap<String, VariantDict>;
 
 /// Extension trait for extracting strongly-typed values from a D-Bus dictionary.
 pub trait ValueMapExt {
@@ -30,7 +34,7 @@ pub trait ValueMapExt {
     fn get_string_or_default(&self, key: &str) -> String;
 }
 
-impl ValueMapExt for ValueMap {
+impl ValueMapExt for VariantDict {
     fn get_as<'a, T>(&'a self, key: &str) -> Option<T>
     where
         T: TryFrom<&'a OwnedValue>,

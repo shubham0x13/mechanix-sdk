@@ -59,10 +59,12 @@ impl BluetoothManager {
         Ok(client)
     }
 
+    /// Builds an ObjectManager proxy for querying BlueZ managed objects.
     async fn object_manager(&self) -> Result<ObjectManagerProxy<'_>, BluetoothError> {
         Ok(ObjectManagerProxy::new(&self.connection, BLUEZ_DEST, BLUEZ_PATH).await?)
     }
 
+    /// Fetches all BlueZ managed objects and their interface properties.
     async fn managed_objects(&self) -> Result<ManagedObjects, BluetoothError> {
         Ok(self.object_manager().await?.get_managed_objects().await?)
     }
@@ -107,6 +109,7 @@ impl BluetoothManager {
         Ok(devices)
     }
 
+    /// Returns the preferred adapter: first powered one, otherwise the first available adapter.
     pub async fn get_default_adapter(&self) -> Result<Option<AdapterInfo>, BluetoothError> {
         let mut adapters = self.get_adapters().await?;
 
