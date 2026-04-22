@@ -1,5 +1,4 @@
-use crate::DbusProperties;
-use common::ValueMapExt;
+use common::{ValueMapExt, VariantDict};
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -19,7 +18,7 @@ pub struct DeviceInfo {
 }
 
 impl DeviceInfo {
-    pub(crate) fn from_properties(path: String, props: &DbusProperties) -> Self {
+    pub(crate) fn from_properties(path: String, props: &VariantDict) -> Self {
         Self {
             path,
             name: props.get_string("Name"),

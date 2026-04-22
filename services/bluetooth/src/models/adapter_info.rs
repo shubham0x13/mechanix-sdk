@@ -1,5 +1,4 @@
-use crate::DbusProperties;
-use common::ValueMapExt;
+use common::{ValueMapExt, VariantDict};
 
 #[derive(Debug, Clone)]
 pub struct AdapterInfo {
@@ -15,7 +14,7 @@ pub struct AdapterInfo {
 }
 
 impl AdapterInfo {
-    pub(crate) fn from_properties(path: String, props: &DbusProperties) -> Self {
+    pub(crate) fn from_properties(path: String, props: &VariantDict) -> Self {
         let name = path.split('/').next_back().unwrap_or("unknown").to_string();
         Self {
             path,
