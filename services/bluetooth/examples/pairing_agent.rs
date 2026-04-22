@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         adapter.address
     );
 
-    let adapter = bt.adapter(&adapter.name);
+    let adapter = bt.adapter(&adapter.name).await?;
     adapter.set_discoverable(true).await?;
     adapter.set_pairable(true).await?;
 

@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(10);
 
     let bt = BluetoothManager::new().await?;
-    let adapter = bt.adapter(&adapter_name);
+    let adapter = bt.adapter(&adapter_name).await?;
     let mut events = bt.subscribe();
 
     if !adapter.is_powered().await? {

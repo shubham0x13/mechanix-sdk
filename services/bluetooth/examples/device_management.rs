@@ -32,7 +32,7 @@ async fn print_device_info(
     bt: &BluetoothManager,
     device_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let device = bt.device(device_path);
+    let device = bt.device(device_path).await?;
 
     let name = device.name().await?;
     let alias = device.alias().await?;
@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let bt = BluetoothManager::new().await?;
-    let device = bt.device(&device_path);
+    let device = bt.device(&device_path).await?;
 
     match action.as_str() {
         "info" => {
@@ -129,7 +129,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     format!("Could not infer adapter name from path: {}", device_path).into(),
                 );
             };
-            bt.adapter(adapter_name).forget_device(&device_path).await?;
+            bt.adapter(adapter_name)
+                .await?
+                .forget_device(&device_path)
+                .await?;
             println!("Device forgotten from adapter {}.", adapter_name);
         }
         _ => {

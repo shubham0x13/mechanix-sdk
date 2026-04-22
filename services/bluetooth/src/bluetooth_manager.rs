@@ -70,13 +70,13 @@ impl BluetoothManager {
     }
 
     /// Returns an `Adapter` struct to control a specific radio.
-    pub fn adapter(&self, name: &str) -> Adapter {
-        Adapter::new(self.connection.clone(), name)
+    pub async fn adapter(&self, name: &str) -> Result<Adapter, BluetoothError> {
+        Adapter::new(self.connection.clone(), name).await
     }
 
     /// Returns a `Device` struct to control a specific remote device.
-    pub fn device(&self, path: &str) -> Device {
-        Device::new(self.connection.clone(), path)
+    pub async fn device(&self, path: &str) -> Result<Device, BluetoothError> {
+        Device::new(self.connection.clone(), path).await
     }
 
     /// Retrieves a list of all available Bluetooth adapters (e.g., ["hci0", "hci1"]).
