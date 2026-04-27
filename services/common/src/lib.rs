@@ -1,3 +1,6 @@
+pub mod dbus;
+pub use dbus::*;
+
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 

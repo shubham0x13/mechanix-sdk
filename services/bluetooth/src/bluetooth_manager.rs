@@ -1,15 +1,15 @@
-use futures::StreamExt;
+use futures::Stream;
 use std::collections::HashMap;
-use tokio::{
-    sync::{broadcast, mpsc},
-    time::{Duration, sleep},
-};
+use tokio::sync::mpsc;
 use zbus::{
-    Connection, MatchRule, MessageStream,
+    Connection, MatchRule,
     fdo::{ManagedObjects, ObjectManagerProxy},
     message::Type,
-    zvariant::OwnedValue,
+    zvariant::{OwnedObjectPath, OwnedValue},
 };
+
+// Import your generic stream builder from your common crate
+use common::dbus::create_event_stream;
 
 use crate::{
     AdapterInfo, DeviceInfo, RegisteredAgent,
@@ -26,29 +26,18 @@ const BLUEZ_PATH: &str = "/";
 const IFACE_ADAPTER: &str = "org.bluez.Adapter1";
 const IFACE_DEVICE: &str = "org.bluez.Device1";
 const IFACE_BATTERY: &str = "org.bluez.Battery1";
-const EVENT_RECONNECT_INITIAL_BACKOFF_MS: u64 = 250;
-const EVENT_RECONNECT_MAX_BACKOFF_MS: u64 = 5_000;
 
 /// The root client for interacting with the BlueZ Bluetooth stack.
 #[derive(Clone)]
 pub struct BluetoothManager {
     connection: Connection,
-    event_tx: broadcast::Sender<BluetoothEvent>,
 }
 
 impl BluetoothManager {
-    /// Establishes a connection to the system D-Bus and spawns the global event bus.
+    /// Establishes a connection to the system D-Bus.
     pub async fn new() -> Result<Self, BluetoothError> {
         let connection = Connection::system().await?;
-        let (event_tx, _) = broadcast::channel(100);
-
-        let client = Self {
-            connection,
-            event_tx,
-        };
-
-        client.spawn_event_bus();
-        Ok(client)
+        Ok(Self { connection })
     }
 
     /// Builds an ObjectManager proxy for querying BlueZ managed objects.
@@ -71,7 +60,7 @@ impl BluetoothManager {
         Device::new(self.connection.clone(), path).await
     }
 
-    /// Retrieves a list of all available Bluetooth adapters (e.g., ["hci0", "hci1"]).
+    /// Retrieves a list of all available Bluetooth adapters.
     pub async fn get_adapters(&self) -> Result<Vec<AdapterInfo>, BluetoothError> {
         let managed_objects = self.managed_objects().await?;
         let adapters = managed_objects
@@ -109,22 +98,13 @@ impl BluetoothManager {
             return Ok(None);
         }
 
-        // Sort them alphabetically by path so "/org/bluez/hci0" usually comes
-        // before "/org/bluez/hci1", ensuring deterministic behavior.
         adapters.sort_by(|a, b| a.path.cmp(&b.path));
 
-        // Find the first adapter that is actively powered on.
         if let Some(powered_adapter) = adapters.iter().find(|a| a.powered) {
             return Ok(Some(powered_adapter.clone()));
         }
 
-        // If everything is turned off, just return the first one (usually hci0).
         Ok(adapters.into_iter().next())
-    }
-
-    /// Subscribes to the global event bus. Receives all adapter and device state changes.
-    pub fn subscribe(&self) -> broadcast::Receiver<BluetoothEvent> {
-        self.event_tx.subscribe()
     }
 
     /// Registers a pairing agent.
@@ -137,107 +117,50 @@ impl BluetoothManager {
     }
 
     // ==========================================
-    // The Core Event Router
+    // Event Streaming & Parsing
     // ==========================================
 
-    fn spawn_event_bus(&self) {
-        let connection = self.connection.clone();
-        let tx = self.event_tx.clone();
+    /// Returns a resilient, auto-reconnecting Stream of Bluetooth events.
+    pub fn stream_events(&self) -> impl Stream<Item = BluetoothEvent> + Send + 'static {
+        let rule = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender(BLUEZ_DEST)
+            .expect("Failed to build BlueZ match rule")
+            .build();
 
-        tokio::spawn(async move {
-            let rule = match MatchRule::builder()
-                .msg_type(Type::Signal)
-                .sender("org.bluez")
-            {
-                Ok(builder) => builder.build(),
-                Err(err) => {
-                    eprintln!("BlueZ event bus setup failed to build match rule: {err}");
-                    return;
-                }
-            };
-
-            let mut reconnect_backoff = Duration::from_millis(EVENT_RECONNECT_INITIAL_BACKOFF_MS);
-
-            loop {
-                let mut stream =
-                    match MessageStream::for_match_rule(rule.clone(), &connection, None).await {
-                        Ok(stream) => {
-                            reconnect_backoff =
-                                Duration::from_millis(EVENT_RECONNECT_INITIAL_BACKOFF_MS);
-                            stream
-                        }
-                        Err(err) => {
-                            eprintln!(
-                                "BlueZ event bus stream creation failed: {err}. Retrying in {:?}.",
-                                reconnect_backoff
-                            );
-                            sleep(reconnect_backoff).await;
-                            reconnect_backoff = (reconnect_backoff * 2)
-                                .min(Duration::from_millis(EVENT_RECONNECT_MAX_BACKOFF_MS));
-                            continue;
-                        }
-                    };
-
-                loop {
-                    match stream.next().await {
-                        Some(Ok(msg)) => {
-                            Self::route_event_signal(&tx, &msg);
-                        }
-                        Some(Err(err)) => {
-                            eprintln!("BlueZ event bus stream error: {err}. Reconnecting.");
-                            break;
-                        }
-                        None => {
-                            eprintln!("BlueZ event bus stream ended. Reconnecting.");
-                            break;
-                        }
-                    }
-                }
-
-                sleep(reconnect_backoff).await;
-                reconnect_backoff = (reconnect_backoff * 2)
-                    .min(Duration::from_millis(EVENT_RECONNECT_MAX_BACKOFF_MS));
-            }
-        });
+        create_event_stream(self.connection.clone(), rule, Self::parse_bluez_signal)
     }
 
-    fn route_event_signal(tx: &broadcast::Sender<BluetoothEvent>, msg: &zbus::Message) {
+    /// Main entry point for parsing D-Bus signals into our domain events
+    fn parse_bluez_signal(msg: &zbus::Message) -> Vec<BluetoothEvent> {
         let header = msg.header();
 
         let member = header.member().map(|m| m.as_str());
         let interface = header.interface().map(|i| i.as_str());
         let Some(path) = header.path().map(|p| p.to_string()) else {
-            return;
+            return vec![];
         };
 
-        // Route the raw D-Bus message to our parsers
         match (interface, member) {
             (Some("org.freedesktop.DBus.Properties"), Some("PropertiesChanged")) => {
-                Self::handle_properties_changed(tx, msg, path);
+                Self::parse_properties_changed(msg, path)
             }
             (Some("org.freedesktop.DBus.ObjectManager"), Some("InterfacesAdded")) => {
-                Self::handle_interfaces_added(tx, msg);
+                Self::parse_interfaces_added(msg)
             }
             (Some("org.freedesktop.DBus.ObjectManager"), Some("InterfacesRemoved")) => {
-                Self::handle_interfaces_removed(tx, msg);
+                Self::parse_interfaces_removed(msg)
             }
-            _ => {} // Ignore other signals
+            _ => vec![],
         }
     }
 
-    // ==========================================
-    // Signal Parsers
-    // ==========================================
-
-    fn handle_properties_changed(
-        tx: &broadcast::Sender<BluetoothEvent>,
-        msg: &zbus::Message,
-        path: String,
-    ) {
+    fn parse_properties_changed(msg: &zbus::Message, path: String) -> Vec<BluetoothEvent> {
         type PropsData = (String, HashMap<String, OwnedValue>, Vec<String>);
+        let mut events = Vec::new();
 
         let Ok((iface, changed_props, _)) = msg.body().deserialize::<PropsData>() else {
-            return;
+            return events;
         };
 
         match iface.as_str() {
@@ -247,7 +170,7 @@ impl BluetoothManager {
                 if let Some(val) = changed_props.get("Powered")
                     && let Ok(powered) = bool::try_from(val)
                 {
-                    let _ = tx.send(BluetoothEvent::AdapterPowerChanged {
+                    events.push(BluetoothEvent::AdapterPowerChanged {
                         adapter_name: adapter_name.clone(),
                         powered,
                     });
@@ -255,40 +178,38 @@ impl BluetoothManager {
                 if let Some(val) = changed_props.get("Discovering")
                     && let Ok(discovering) = bool::try_from(val)
                 {
-                    let _ = tx.send(BluetoothEvent::DiscoveryStateChanged {
+                    events.push(BluetoothEvent::DiscoveryStateChanged {
                         adapter_name,
                         discovering,
                     });
                 }
             }
             IFACE_DEVICE => {
-                // Incorporating the next_back() fix from earlier!
                 let address = path.split("dev_").last().unwrap_or("").replace('_', ":");
 
                 if let Some(connected) = changed_props
                     .get("Connected")
                     .and_then(|v| bool::try_from(v).ok())
                 {
-                    let event = if connected {
-                        BluetoothEvent::DeviceConnected {
-                            path: path.to_string(),
+                    if connected {
+                        events.push(BluetoothEvent::DeviceConnected {
+                            path: path.clone(),
                             address,
-                        }
+                        });
                     } else {
-                        BluetoothEvent::DeviceDisconnected {
-                            path: path.to_string(),
+                        events.push(BluetoothEvent::DeviceDisconnected {
+                            path: path.clone(),
                             address,
-                        }
-                    };
-                    let _ = tx.send(event);
+                        });
+                    }
                 }
 
                 if let Some(rssi) = changed_props
                     .get("RSSI")
                     .and_then(|v| i16::try_from(v).ok())
                 {
-                    let _ = tx.send(BluetoothEvent::DeviceRssiChanged {
-                        path: path.to_string(),
+                    events.push(BluetoothEvent::DeviceRssiChanged {
+                        path: path.clone(),
                         rssi,
                     });
                 }
@@ -298,46 +219,49 @@ impl BluetoothManager {
                     .get("Percentage")
                     .and_then(|v| u8::try_from(v).ok())
                 {
-                    let _ = tx.send(BluetoothEvent::BatteryChanged {
-                        path: path.to_string(),
-                        percentage,
-                    });
+                    events.push(BluetoothEvent::BatteryChanged { path, percentage });
                 }
             }
             _ => {}
         }
+
+        events
     }
 
-    fn handle_interfaces_added(tx: &broadcast::Sender<BluetoothEvent>, msg: &zbus::Message) {
-        use zbus::zvariant::OwnedObjectPath;
+    fn parse_interfaces_added(msg: &zbus::Message) -> Vec<BluetoothEvent> {
         type AddedData = (
             OwnedObjectPath,
             HashMap<String, HashMap<String, OwnedValue>>,
         );
+        let mut events = Vec::new();
 
         let Ok((obj_path, interfaces)) = msg.body().deserialize::<AddedData>() else {
-            return;
+            return events;
         };
         let path_str = obj_path.as_str();
 
         if let Some(adapter_props) = interfaces.get(IFACE_ADAPTER) {
-            let info = AdapterInfo::from_properties(path_str.to_string(), adapter_props);
-            let _ = tx.send(BluetoothEvent::AdapterAdded(info));
+            events.push(BluetoothEvent::AdapterAdded(AdapterInfo::from_properties(
+                path_str.to_string(),
+                adapter_props,
+            )));
         }
 
         if let Some(device_props) = interfaces.get(IFACE_DEVICE) {
-            let info = DeviceInfo::from_properties(path_str.to_string(), device_props);
-            // println!("{:?}", device_props);
-            let _ = tx.send(BluetoothEvent::DeviceDiscovered(info));
+            events.push(BluetoothEvent::DeviceDiscovered(
+                DeviceInfo::from_properties(path_str.to_string(), device_props),
+            ));
         }
+
+        events
     }
 
-    fn handle_interfaces_removed(tx: &broadcast::Sender<BluetoothEvent>, msg: &zbus::Message) {
-        use zbus::zvariant::OwnedObjectPath;
+    fn parse_interfaces_removed(msg: &zbus::Message) -> Vec<BluetoothEvent> {
         type RemovedData = (OwnedObjectPath, Vec<String>);
+        let mut events = Vec::new();
 
         let Ok((obj_path, interfaces)) = msg.body().deserialize::<RemovedData>() else {
-            return;
+            return events;
         };
         let path_str = obj_path.as_str();
 
@@ -347,13 +271,15 @@ impl BluetoothManager {
                 .next_back()
                 .unwrap_or("unknown")
                 .to_string();
-            let _ = tx.send(BluetoothEvent::AdapterRemoved { name });
+            events.push(BluetoothEvent::AdapterRemoved { name });
         }
 
         if interfaces.iter().any(|i| i == IFACE_DEVICE) {
-            let _ = tx.send(BluetoothEvent::DeviceLost {
+            events.push(BluetoothEvent::DeviceLost {
                 path: path_str.to_string(),
             });
         }
+
+        events
     }
 }

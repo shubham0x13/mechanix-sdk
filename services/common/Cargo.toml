@@ -8,3 +8,6 @@ license.workspace = true
 
 [dependencies]
 zbus = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }

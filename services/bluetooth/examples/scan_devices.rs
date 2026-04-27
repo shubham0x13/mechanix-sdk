@@ -1,9 +1,10 @@
+use bluetooth::{BluetoothEvent, BluetoothManager};
+use futures::StreamExt;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
-
-use bluetooth::{BluetoothEvent, BluetoothManager};
+use tokio::pin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +18,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bt = BluetoothManager::new().await?;
     let adapter = bt.adapter(&adapter_name).await?;
-    let mut events = bt.subscribe();
+    let events = bt.stream_events();
+
+    pin!(events);
 
     if !adapter.is_powered().await? {
         println!("Adapter {} is off. Powering it on...", adapter_name);
@@ -38,8 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         };
 
-        let recv = tokio::time::timeout(wait_time, events.recv()).await;
-        let Ok(Ok(event)) = recv else {
+        let recv = tokio::time::timeout(wait_time, events.next()).await;
+        let Ok(Some(event)) = recv else {
             break;
         };
 

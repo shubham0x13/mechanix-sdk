@@ -1,23 +1,24 @@
 use bluetooth::{BluetoothEvent, BluetoothManager};
+use futures::StreamExt;
+use tokio::pin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bt = BluetoothManager::new().await?;
-    let mut events = bt.subscribe();
+    let events = bt.stream_events();
+
+    pin!(events);
 
     println!("Listening for Bluetooth events. Press Ctrl+C to exit.");
 
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("Stopping event monitor...");
+                println!("\nStopping event monitor...");
                 break;
             }
-            evt = events.recv() => {
-                match evt {
-                    Ok(event) => print_event(event),
-                    Err(err) => eprintln!("Event stream error: {}", err),
-                }
+            Some(event) = events.next() => {
+                print_event(event);
             }
         }
     }
