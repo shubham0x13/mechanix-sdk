@@ -480,7 +480,7 @@ fn pw_thread(
                                     state_meta.write().default_sink = name;
                                 }
                                 Some("default.audio.source") => {
-                                    let name = value.and_then(|v| extract_name_from_json(v));
+                                    let name = value.and_then(extract_name_from_json);
                                     state_meta.write().default_source = name;
                                 }
                                 _ => {}
@@ -633,10 +633,10 @@ fn parse_props_pod(pod: &Pod, node_id: u32, state: &RwLock<SharedState>) {
     for prop in &obj.properties {
         match prop.key {
             pipewire::spa::sys::SPA_PROP_channelVolumes => {
-                if let Value::ValueArray(ValueArray::Float(vols)) = &prop.value {
-                    if !vols.is_empty() {
-                        volume = Some(vols.iter().copied().sum::<f32>() / vols.len() as f32);
-                    }
+                if let Value::ValueArray(ValueArray::Float(vols)) = &prop.value
+                    && !vols.is_empty()
+                {
+                    volume = Some(vols.iter().copied().sum::<f32>() / vols.len() as f32);
                 }
             }
             pipewire::spa::sys::SPA_PROP_mute => {

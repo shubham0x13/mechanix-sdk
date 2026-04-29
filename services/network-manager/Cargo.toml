@@ -7,3 +7,11 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+common = { path = "../common" }
+zbus = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+num_enum = { workspace = true }
+bitflags = { workspace = true }

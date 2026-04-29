@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod dbus;
+pub mod error;
+mod events;
+mod models;
+pub mod network_manager;
+pub mod types;
+pub mod wifi_device;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use error::NetworkManagerError;
+pub use events::NetworkManagerEvent;
+pub use models::{ActiveConnectionInfo, SavedConnectionInfo, WifiAccessPointInfo, WifiDeviceInfo};
+pub use network_manager::NetworkManager;
+pub use wifi_device::WifiDevice;
