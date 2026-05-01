@@ -1,39 +1,64 @@
-use common::{ValueMapExt, VariantDict};
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use zbus::zvariant::{DeserializeDict, OwnedObjectPath, OwnedValue, Type, Value};
+
+#[derive(DeserializeDict, Type, OwnedValue, Debug, Default, Clone)]
+#[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+pub struct AdapterProperties {
+    pub address: Option<String>,
+    pub address_type: Option<String>,
+    pub name: Option<String>,
+    pub alias: Option<String>,
+    pub class: Option<u32>,
+    pub powered: Option<bool>,
+    pub power_state: Option<String>,
+    pub connactable: Option<bool>,
+    pub discovering: Option<bool>,
+    pub discoverable: Option<bool>,
+    pub discoverable_timeout: Option<u32>,
+    pub pairable: Option<bool>,
+    pub pairable_timeout: Option<u32>,
+
+    #[zvariant(rename = "UUIDs")]
+    pub uuids: Option<Vec<String>>,
+    pub roles: Option<Vec<String>>,
+    pub modalias: Option<String>,
+    pub manufacturer: Option<u16>,
+    pub version: Option<u8>,
+    pub experimental_features: Option<Vec<String>>,
+}
 
 #[derive(Debug, Clone)]
 pub struct AdapterInfo {
-    pub path: String,
-    pub name: String,
-    pub alias: String,
-    pub address: String,
-    pub powered: bool,
-    pub discoverable: bool,
-    pub pairable: bool,
-    pub connectable: bool,
-    pub discovering: bool,
+    pub path: OwnedObjectPath,
+    pub properties: AdapterProperties,
 }
 
 impl AdapterInfo {
-    pub(crate) fn from_properties(path: String, props: &VariantDict) -> Self {
-        let name = path.split('/').next_back().unwrap_or("unknown").to_string();
-        Self {
+    pub fn from_properties(
+        path: OwnedObjectPath,
+        props: &HashMap<String, OwnedValue>,
+    ) -> Result<Self, zbus::zvariant::Error> {
+        let owned: OwnedValue = props.clone().into();
+        Ok(Self {
             path,
-            name,
-            alias: props.get_string_or_default("Alias"),
-            address: props.get_string_or_default("Address"),
-            powered: props.get_as_or_default("Powered"),
-            discoverable: props.get_as_or_default("Discoverable"),
-            pairable: props.get_as_or_default("Pairable"),
-            connectable: props.get_as_or_default("Connectable"),
-            discovering: props.get_as_or_default("Discovering"),
-        }
+            properties: AdapterProperties::try_from(owned)?,
+        })
     }
 
-    pub fn display_name(&self) -> String {
-        if !self.alias.is_empty() {
-            self.alias.clone()
-        } else {
-            self.name.clone()
-        }
+    pub fn display_name(&self) -> &str {
+        self.properties
+            .alias
+            .as_deref()
+            .or(self.properties.name.as_deref())
+            .unwrap_or("Unknown Adapter")
     }
+}
+
+#[derive(Deserialize, Serialize, Type, Value, OwnedValue, Debug, Clone, PartialEq)]
+#[zvariant(signature = "s", rename_all = "lowercase")]
+pub enum AddressType {
+    Public,
+    Random,
 }

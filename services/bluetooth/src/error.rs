@@ -8,6 +8,9 @@ pub enum BluetoothError {
     #[error("D-Bus FDO error: {0}")]
     DBusFdo(#[from] zbus::fdo::Error),
 
+    #[error("D-Bus variant error: {0}")]
+    Zvariant(#[from] zbus::zvariant::Error),
+
     #[error("Invalid MAC address format: {0}")]
     InvalidMacAddress(String),
 

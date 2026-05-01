@@ -68,9 +68,9 @@ impl BluetoothManager {
             .filter_map(|(path, interfaces)| {
                 interfaces
                     .get(IFACE_ADAPTER)
-                    .map(|props| AdapterInfo::from_properties(path.to_string(), props))
+                    .map(|props| AdapterInfo::from_properties(path.to_owned(), props))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         Ok(adapters)
     }
@@ -83,9 +83,9 @@ impl BluetoothManager {
             .filter_map(|(path, interfaces)| {
                 interfaces
                     .get(IFACE_DEVICE)
-                    .map(|props| DeviceInfo::from_properties(path.to_string(), props))
+                    .map(|props| DeviceInfo::from_properties(path.to_owned(), props))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         Ok(devices)
     }
@@ -100,7 +100,10 @@ impl BluetoothManager {
 
         adapters.sort_by(|a, b| a.path.cmp(&b.path));
 
-        if let Some(powered_adapter) = adapters.iter().find(|a| a.powered) {
+        if let Some(powered_adapter) = adapters
+            .iter()
+            .find(|a| a.properties.powered.unwrap_or(false))
+        {
             return Ok(Some(powered_adapter.clone()));
         }
 
@@ -238,19 +241,17 @@ impl BluetoothManager {
         let Ok((obj_path, interfaces)) = msg.body().deserialize::<AddedData>() else {
             return events;
         };
-        let path_str = obj_path.as_str();
 
-        if let Some(adapter_props) = interfaces.get(IFACE_ADAPTER) {
-            events.push(BluetoothEvent::AdapterAdded(AdapterInfo::from_properties(
-                path_str.to_string(),
-                adapter_props,
-            )));
+        if let Some(adapter_props) = interfaces.get(IFACE_ADAPTER)
+            && let Ok(adapter_info) = AdapterInfo::from_properties(obj_path.clone(), adapter_props)
+        {
+            events.push(BluetoothEvent::AdapterAdded(adapter_info));
         }
 
-        if let Some(device_props) = interfaces.get(IFACE_DEVICE) {
-            events.push(BluetoothEvent::DeviceDiscovered(
-                DeviceInfo::from_properties(path_str.to_string(), device_props),
-            ));
+        if let Some(device_props) = interfaces.get(IFACE_DEVICE)
+            && let Ok(device_info) = DeviceInfo::from_properties(obj_path.clone(), device_props)
+        {
+            events.push(BluetoothEvent::DeviceDiscovered(device_info));
         }
 
         events

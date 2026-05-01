@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::pin;
+use zbus::zvariant::OwnedObjectPath;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let start = Instant::now();
-    let mut discovered: HashMap<String, String> = HashMap::new();
+    let mut discovered: HashMap<OwnedObjectPath, String> = HashMap::new();
 
     while start.elapsed() < Duration::from_secs(seconds) {
         let Some(wait_time) = Duration::from_secs(seconds).checked_sub(start.elapsed()) else {
@@ -49,9 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let BluetoothEvent::DeviceDiscovered(info) = event {
             discovered.insert(info.path.clone(), info.display_name().to_string());
             println!(
-                "Discovered: {} ({}) -> {}",
+                "Discovered: {} ({:?}) -> {}",
                 info.display_name(),
-                info.address,
+                info.properties.address,
                 info.path
             );
         }

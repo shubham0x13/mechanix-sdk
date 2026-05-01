@@ -18,12 +18,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("No Bluetooth adapters found")?;
 
     println!(
-        "Using adapter: {} ({})",
+        "Using adapter: {} ({:?})",
         adapter.display_name(),
-        adapter.address
+        adapter.properties.address
     );
 
-    let adapter = bt.adapter(&adapter.name).await?;
+    let adapter = bt.adapter(&adapter.properties.name.unwrap()).await?;
     adapter.set_discoverable(true).await?;
     adapter.set_pairable(true).await?;
 

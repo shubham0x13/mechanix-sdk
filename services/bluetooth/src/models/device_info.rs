@@ -1,48 +1,56 @@
-use common::{ValueMapExt, VariantDict};
+use std::collections::HashMap;
+
+use zbus::zvariant::{DeserializeDict, OwnedObjectPath, OwnedValue, Type};
+
+#[derive(DeserializeDict, Type, OwnedValue, Debug, Default, Clone)]
+#[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+pub struct DeviceProperties {
+    pub adapter: Option<OwnedObjectPath>,
+    pub address: Option<String>,
+    pub address_type: Option<String>,
+    pub name: Option<String>,
+    pub alias: Option<String>,
+    pub icon: Option<String>,
+    pub class: Option<u32>,
+    pub appearance: Option<u16>,
+    pub connected: Option<bool>,
+    pub paired: Option<bool>,
+    pub trusted: Option<bool>,
+    pub blocked: Option<bool>,
+    pub services_resolved: Option<bool>,
+    pub rssi: Option<i16>,
+    pub tx_power: Option<i16>,
+    pub manufacturer_data: Option<HashMap<u16, OwnedValue>>,
+    pub service_data: Option<HashMap<String, OwnedValue>>,
+    pub uuids: Option<Vec<String>>,
+    pub wake_allowed: Option<bool>,
+    pub legacy_pairing: Option<bool>,
+    pub modalias: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
-    pub path: String,
-    pub name: Option<String>,
-    pub alias: String,
-    pub address: String,
-    pub icon: Option<String>,
-    pub paired: bool,
-    pub connected: bool,
-    pub trusted: bool,
-    pub blocked: bool,
-    pub wake_allowed: bool,
-    pub services_resolved: bool,
-    pub rssi: Option<i16>,
-    pub battery_percentage: Option<u8>,
+    pub path: OwnedObjectPath,
+    pub properties: DeviceProperties,
 }
 
 impl DeviceInfo {
-    pub(crate) fn from_properties(path: String, props: &VariantDict) -> Self {
-        Self {
+    pub fn from_properties(
+        path: OwnedObjectPath,
+        props: &HashMap<String, OwnedValue>,
+    ) -> Result<Self, zbus::zvariant::Error> {
+        let owned: OwnedValue = props.clone().into();
+        Ok(Self {
             path,
-            name: props.get_string("Name"),
-            alias: props.get_string_or_default("Alias"),
-            address: props.get_string_or_default("Address"),
-            icon: props.get_string("Icon"),
-            paired: props.get_as_or_default("Paired"),
-            connected: props.get_as_or_default("Connected"),
-            trusted: props.get_as_or_default("Trusted"),
-            blocked: props.get_as_or_default("Blocked"),
-            wake_allowed: props.get_as_or_default("WakeAllowed"),
-            services_resolved: props.get_as_or_default("ServicesResolved"),
-            rssi: props.get_as("RSSI"),
-            battery_percentage: props.get_as("BatteryPercentage"),
-        }
+            properties: DeviceProperties::try_from(owned)?,
+        })
     }
 
     pub fn display_name(&self) -> &str {
-        if !self.alias.is_empty() {
-            &self.alias
-        } else if let Some(name) = &self.name {
-            name
-        } else {
-            &self.address
-        }
+        self.properties
+            .alias
+            .as_deref()
+            .or(self.properties.name.as_deref())
+            .unwrap_or("Unknown Device")
     }
 }
