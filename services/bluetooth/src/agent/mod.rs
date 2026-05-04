@@ -1,12 +1,11 @@
 pub(crate) mod server;
 pub mod types;
 
-pub use types::*;
-
 use self::server::BluezAgent;
 use crate::{dbus::AgentManager1Proxy, error::BluetoothError};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
+pub use types::*;
 use zbus::Connection;
 
 const AGENT_ROOT_PATH: &str = "/org/bluez/agents";
@@ -43,7 +42,15 @@ impl RegisteredAgent {
         let proxy = AgentManager1Proxy::new(&connection).await?;
         proxy
             .register_agent(&dbus_path, capability.as_str())
-            .await?;
+            .await
+            .map_err(|e| match &e {
+                zbus::Error::FDO(fdo)
+                    if matches!(fdo.as_ref(), zbus::fdo::Error::FileExists(_)) =>
+                {
+                    BluetoothError::AgentAlreadyRegistered
+                }
+                _ => BluetoothError::DBus(e),
+            })?;
 
         if set_as_default {
             proxy.request_default_agent(&dbus_path).await?;
@@ -64,7 +71,14 @@ impl RegisteredAgent {
             .map_err(|_| BluetoothError::InvalidObjectPath(self.path.clone()))?;
 
         let proxy = AgentManager1Proxy::new(&self.connection).await?;
-        proxy.unregister_agent(&path).await?;
+        proxy.unregister_agent(&path).await.map_err(|e| match &e {
+            zbus::Error::FDO(fdo)
+                if matches!(fdo.as_ref(), zbus::fdo::Error::ServiceUnknown(_)) =>
+            {
+                BluetoothError::AgentNotRegistered
+            }
+            _ => BluetoothError::DBus(e),
+        })?;
 
         self.connection
             .object_server()

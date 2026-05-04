@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::pin;
+use zbus::zvariant::OwnedObjectPath;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,8 +17,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(10);
 
+    let adapter_path = format!("/org/bluez/{}", adapter_name);
+
     let bt = BluetoothManager::new().await?;
-    let adapter = bt.adapter(&adapter_name).await?;
+    let adapter = bt.adapter(adapter_path).await?;
     let events = bt.stream_events();
 
     pin!(events);
@@ -34,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let start = Instant::now();
-    let mut discovered: HashMap<String, String> = HashMap::new();
+    let mut discovered: HashMap<OwnedObjectPath, String> = HashMap::new();
 
     while start.elapsed() < Duration::from_secs(seconds) {
         let Some(wait_time) = Duration::from_secs(seconds).checked_sub(start.elapsed()) else {
@@ -47,11 +50,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         if let BluetoothEvent::DeviceDiscovered(info) = event {
+            println!("{:?}", info);
             discovered.insert(info.path.clone(), info.display_name().to_string());
             println!(
-                "Discovered: {} ({}) -> {}",
+                "Discovered: {} ({:?}) -> {}",
                 info.display_name(),
-                info.address,
+                info.properties.address,
                 info.path
             );
         }

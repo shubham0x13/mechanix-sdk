@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(true);
 
     let bt = BluetoothManager::new().await?;
-    let device = bt.device(&device_path).await?;
+    let device = bt.device(device_path.clone()).await?;
 
     println!("Connecting to {} (trust={})...", device_path, trust);
     device.connect_or_pair(trust).await?;

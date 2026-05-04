@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let bt = BluetoothManager::new().await?;
-    let device = bt.device(&device_path).await?;
+    let device = bt.device(device_path.clone()).await?;
 
     match action.as_str() {
         "info" => {
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             bt.adapter(adapter_name)
                 .await?
-                .forget_device(&device_path)
+                .forget_device(device_path.as_str())
                 .await?;
             println!("Device forgotten from adapter {}.", adapter_name);
         }

@@ -3,29 +3,25 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use zbus::{
     Connection, MatchRule,
-    fdo::{ManagedObjects, ObjectManagerProxy},
     message::Type,
-    zvariant::{OwnedObjectPath, OwnedValue},
+    zvariant::{ObjectPath, OwnedObjectPath},
 };
 
-// Import your generic stream builder from your common crate
 use common::dbus::create_event_stream;
 
 use crate::{
     AdapterInfo, DeviceInfo, RegisteredAgent,
     adapter::Adapter,
     agent::{AgentCapability, PairingRequest},
+    dbus::{
+        Adapter1Properties, Battery1Properties, BluezInterfaces, Device1Properties,
+        TypedObjectManagerProxy,
+    },
     device::Device,
     error::BluetoothError,
     events::BluetoothEvent,
+    utils::extract_mac,
 };
-
-// ---------- D-Bus Constants ----------
-const BLUEZ_DEST: &str = "org.bluez";
-const BLUEZ_PATH: &str = "/";
-const IFACE_ADAPTER: &str = "org.bluez.Adapter1";
-const IFACE_DEVICE: &str = "org.bluez.Device1";
-const IFACE_BATTERY: &str = "org.bluez.Battery1";
 
 /// The root client for interacting with the BlueZ Bluetooth stack.
 #[derive(Clone)]
@@ -41,22 +37,32 @@ impl BluetoothManager {
     }
 
     /// Builds an ObjectManager proxy for querying BlueZ managed objects.
-    async fn object_manager(&self) -> Result<ObjectManagerProxy<'_>, BluetoothError> {
-        Ok(ObjectManagerProxy::new(&self.connection, BLUEZ_DEST, BLUEZ_PATH).await?)
+    async fn object_manager(&self) -> Result<TypedObjectManagerProxy<'_>, BluetoothError> {
+        Ok(TypedObjectManagerProxy::new(&self.connection).await?)
     }
 
     /// Fetches all BlueZ managed objects and their interface properties.
-    async fn managed_objects(&self) -> Result<ManagedObjects, BluetoothError> {
+    async fn managed_objects(
+        &self,
+    ) -> Result<HashMap<OwnedObjectPath, BluezInterfaces>, BluetoothError> {
         Ok(self.object_manager().await?.get_managed_objects().await?)
     }
 
     /// Returns an `Adapter` struct to control a specific radio.
-    pub async fn adapter(&self, name: &str) -> Result<Adapter, BluetoothError> {
-        Adapter::new(self.connection.clone(), name).await
+    pub async fn adapter<P>(&self, path: P) -> Result<Adapter, BluetoothError>
+    where
+        P: TryInto<OwnedObjectPath>,
+        P::Error: std::fmt::Display,
+    {
+        Adapter::new(self.connection.clone(), path).await
     }
 
     /// Returns a `Device` struct to control a specific remote device.
-    pub async fn device(&self, path: &str) -> Result<Device, BluetoothError> {
+    pub async fn device<P>(&self, path: P) -> Result<Device, BluetoothError>
+    where
+        P: TryInto<OwnedObjectPath>,
+        P::Error: std::fmt::Display,
+    {
         Device::new(self.connection.clone(), path).await
     }
 
@@ -67,8 +73,8 @@ impl BluetoothManager {
             .into_iter()
             .filter_map(|(path, interfaces)| {
                 interfaces
-                    .get(IFACE_ADAPTER)
-                    .map(|props| AdapterInfo::from_properties(path.to_string(), props))
+                    .adapter1
+                    .map(|properties| AdapterInfo::new(path, properties))
             })
             .collect();
 
@@ -82,8 +88,8 @@ impl BluetoothManager {
             .into_iter()
             .filter_map(|(path, interfaces)| {
                 interfaces
-                    .get(IFACE_DEVICE)
-                    .map(|props| DeviceInfo::from_properties(path.to_string(), props))
+                    .device1
+                    .map(|properties| DeviceInfo::new(path, properties))
             })
             .collect();
 
@@ -91,6 +97,8 @@ impl BluetoothManager {
     }
 
     /// Returns the preferred adapter: first powered one, otherwise the first available adapter.
+    ///
+    /// Returns [`BluetoothError::NoAdapterFound`] if no adapters are present.
     pub async fn get_default_adapter(&self) -> Result<Option<AdapterInfo>, BluetoothError> {
         let mut adapters = self.get_adapters().await?;
 
@@ -100,14 +108,19 @@ impl BluetoothManager {
 
         adapters.sort_by(|a, b| a.path.cmp(&b.path));
 
-        if let Some(powered_adapter) = adapters.iter().find(|a| a.powered) {
-            return Ok(Some(powered_adapter.clone()));
+        if let Some(powered) = adapters
+            .iter()
+            .find(|a| a.properties.powered.unwrap_or(false))
+        {
+            return Ok(Some(powered.clone()));
         }
 
         Ok(adapters.into_iter().next())
     }
 
     /// Registers a pairing agent.
+    ///
+    /// Returns [`BluetoothError::AgentAlreadyRegistered`] if an agent is already active.
     pub async fn register_agent(
         &self,
         capability: AgentCapability,
@@ -124,7 +137,7 @@ impl BluetoothManager {
     pub fn stream_events(&self) -> impl Stream<Item = BluetoothEvent> + Send + 'static {
         let rule = MatchRule::builder()
             .msg_type(Type::Signal)
-            .sender(BLUEZ_DEST)
+            .sender(BluezInterfaces::BLUEZ_DEST)
             .expect("Failed to build BlueZ match rule")
             .build();
 
@@ -137,7 +150,7 @@ impl BluetoothManager {
 
         let member = header.member().map(|m| m.as_str());
         let interface = header.interface().map(|i| i.as_str());
-        let Some(path) = header.path().map(|p| p.to_string()) else {
+        let Some(path) = header.path() else {
             return vec![];
         };
 
@@ -155,71 +168,78 @@ impl BluetoothManager {
         }
     }
 
-    fn parse_properties_changed(msg: &zbus::Message, path: String) -> Vec<BluetoothEvent> {
-        type PropsData = (String, HashMap<String, OwnedValue>, Vec<String>);
+    fn parse_properties_changed(msg: &zbus::Message, path: &ObjectPath) -> Vec<BluetoothEvent> {
         let mut events = Vec::new();
+        let owned_path = OwnedObjectPath::from(path.clone());
 
-        let Ok((iface, changed_props, _)) = msg.body().deserialize::<PropsData>() else {
+        let Ok((iface, _props, _invalidated)) = msg.body().deserialize::<(
+            String,
+            HashMap<String, zbus::zvariant::OwnedValue>,
+            Vec<String>,
+        )>() else {
+            tracing::warn!("Failed to peek PropertiesChanged interface for {}", path);
             return events;
         };
 
         match iface.as_str() {
-            IFACE_ADAPTER => {
-                let adapter_name = path.split('/').next_back().unwrap_or("unknown").to_string();
-
-                if let Some(val) = changed_props.get("Powered")
-                    && let Ok(powered) = bool::try_from(val)
+            BluezInterfaces::ADAPTER_IFACE => {
+                match msg
+                    .body()
+                    .deserialize::<(String, Adapter1Properties, Vec<String>)>()
                 {
-                    events.push(BluetoothEvent::AdapterPowerChanged {
-                        adapter_name: adapter_name.clone(),
-                        powered,
-                    });
-                }
-                if let Some(val) = changed_props.get("Discovering")
-                    && let Ok(discovering) = bool::try_from(val)
-                {
-                    events.push(BluetoothEvent::DiscoveryStateChanged {
-                        adapter_name,
-                        discovering,
-                    });
-                }
-            }
-            IFACE_DEVICE => {
-                let address = path.split("dev_").last().unwrap_or("").replace('_', ":");
-
-                if let Some(connected) = changed_props
-                    .get("Connected")
-                    .and_then(|v| bool::try_from(v).ok())
-                {
-                    if connected {
-                        events.push(BluetoothEvent::DeviceConnected {
-                            path: path.clone(),
-                            address,
-                        });
-                    } else {
-                        events.push(BluetoothEvent::DeviceDisconnected {
-                            path: path.clone(),
-                            address,
+                    Ok((_, changes, _)) => {
+                        events.push(BluetoothEvent::AdapterPropertiesChanged {
+                            path: owned_path,
+                            changes,
                         });
                     }
-                }
-
-                if let Some(rssi) = changed_props
-                    .get("RSSI")
-                    .and_then(|v| i16::try_from(v).ok())
-                {
-                    events.push(BluetoothEvent::DeviceRssiChanged {
-                        path: path.clone(),
-                        rssi,
-                    });
+                    Err(e) => tracing::warn!(
+                        "Failed to deserialize Adapter1Properties for {}: {}",
+                        path,
+                        e
+                    ),
                 }
             }
-            IFACE_BATTERY => {
-                if let Some(percentage) = changed_props
-                    .get("Percentage")
-                    .and_then(|v| u8::try_from(v).ok())
+            BluezInterfaces::DEVICE_IFACE => {
+                let address = extract_mac(&owned_path).unwrap_or_default();
+
+                match msg
+                    .body()
+                    .deserialize::<(String, Device1Properties, Vec<String>)>()
                 {
-                    events.push(BluetoothEvent::BatteryChanged { path, percentage });
+                    Ok((_, changes, _)) => {
+                        events.push(BluetoothEvent::DevicePropertiesChanged {
+                            path: owned_path,
+                            address,
+                            changes,
+                        });
+                    }
+                    Err(e) => tracing::warn!(
+                        "Failed to deserialize Device1Properties for {}: {}",
+                        path,
+                        e
+                    ),
+                }
+            }
+            BluezInterfaces::BATTERY_IFACE => {
+                let address = crate::utils::extract_mac(path.as_str()).unwrap_or_default();
+
+                match msg
+                    .body()
+                    .deserialize::<(String, Battery1Properties, Vec<String>)>()
+                {
+                    Ok((_, changes, _)) => {
+                        events.push(BluetoothEvent::BatteryChanged {
+                            path: owned_path,
+                            address,
+                            changes,
+                        });
+                    }
+                    Err(e) => tracing::warn!(
+                        "Failed to deserialize Battery1Properties for {}: {}",
+                        path,
+                        e
+                    ),
                 }
             }
             _ => {}
@@ -229,28 +249,28 @@ impl BluetoothManager {
     }
 
     fn parse_interfaces_added(msg: &zbus::Message) -> Vec<BluetoothEvent> {
-        type AddedData = (
-            OwnedObjectPath,
-            HashMap<String, HashMap<String, OwnedValue>>,
-        );
         let mut events = Vec::new();
 
-        let Ok((obj_path, interfaces)) = msg.body().deserialize::<AddedData>() else {
+        let Ok((obj_path, interfaces)) = msg
+            .body()
+            .deserialize::<(OwnedObjectPath, BluezInterfaces)>()
+        else {
+            tracing::warn!("Failed to deserialize InterfacesAdded signal");
             return events;
         };
-        let path_str = obj_path.as_str();
 
-        if let Some(adapter_props) = interfaces.get(IFACE_ADAPTER) {
-            events.push(BluetoothEvent::AdapterAdded(AdapterInfo::from_properties(
-                path_str.to_string(),
+        if let Some(adapter_props) = interfaces.adapter1 {
+            events.push(BluetoothEvent::AdapterAdded(AdapterInfo::new(
+                obj_path.clone(),
                 adapter_props,
             )));
         }
 
-        if let Some(device_props) = interfaces.get(IFACE_DEVICE) {
-            events.push(BluetoothEvent::DeviceDiscovered(
-                DeviceInfo::from_properties(path_str.to_string(), device_props),
-            ));
+        if let Some(device_props) = interfaces.device1 {
+            events.push(BluetoothEvent::DeviceDiscovered(DeviceInfo::new(
+                obj_path,
+                device_props,
+            )));
         }
 
         events
@@ -261,23 +281,24 @@ impl BluetoothManager {
         let mut events = Vec::new();
 
         let Ok((obj_path, interfaces)) = msg.body().deserialize::<RemovedData>() else {
+            tracing::warn!("Failed to deserialize InterfacesRemoved signal");
             return events;
         };
-        let path_str = obj_path.as_str();
 
-        if interfaces.iter().any(|i| i == IFACE_ADAPTER) {
-            let name = path_str
-                .split('/')
-                .next_back()
-                .unwrap_or("unknown")
-                .to_string();
-            events.push(BluetoothEvent::AdapterRemoved { name });
+        if interfaces
+            .iter()
+            .any(|i| i == BluezInterfaces::ADAPTER_IFACE)
+        {
+            events.push(BluetoothEvent::AdapterRemoved {
+                path: obj_path.clone(),
+            });
         }
 
-        if interfaces.iter().any(|i| i == IFACE_DEVICE) {
-            events.push(BluetoothEvent::DeviceLost {
-                path: path_str.to_string(),
-            });
+        if interfaces
+            .iter()
+            .any(|i| i == BluezInterfaces::DEVICE_IFACE)
+        {
+            events.push(BluetoothEvent::DeviceLost { path: obj_path });
         }
 
         events

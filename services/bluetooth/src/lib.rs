@@ -6,6 +6,7 @@ mod device;
 mod error;
 mod events;
 mod models;
+mod utils;
 
 pub use adapter::Adapter;
 pub use agent::{AgentCapability, ConfirmationResponder, PairingRequest, RegisteredAgent};
