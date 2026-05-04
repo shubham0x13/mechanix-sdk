@@ -18,10 +18,10 @@ pub struct BluezInterfaces {
 }
 
 impl BluezInterfaces {
-    pub const BLUEZ_DEST: &'static str = "org.bluez";
-    pub const ADAPTER_IFACE: &'static str = "org.bluez.Adapter1";
-    pub const DEVICE_IFACE: &'static str = "org.bluez.Device1";
-    pub const BATTERY_IFACE: &'static str = "org.bluez.Battery1";
+    pub const BLUEZ_DEST: &str = "org.bluez";
+    pub const ADAPTER_IFACE: &str = "org.bluez.Adapter1";
+    pub const DEVICE_IFACE: &str = "org.bluez.Device1";
+    pub const BATTERY_IFACE: &str = "org.bluez.Battery1";
 }
 
 #[zbus::proxy(
