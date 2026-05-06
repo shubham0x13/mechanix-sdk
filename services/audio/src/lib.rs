@@ -1,8 +1,10 @@
-pub mod audio;
+pub mod api;
 pub mod error;
+pub mod types;
 
-pub use audio::{
-    client::AudioClient,
-    types::{AudioDevice, DeviceType},
-};
+pub(crate) mod hal;
+pub(crate) mod service;
+
+pub use api::AudioClient;
 pub use error::AudioError;
+pub use types::{AudioDevice, DeviceType};

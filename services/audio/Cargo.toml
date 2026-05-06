@@ -13,6 +13,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 pipewire = { workspace = true }
 parking_lot = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

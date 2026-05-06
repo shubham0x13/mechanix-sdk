@@ -15,11 +15,12 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Output devices ===");
     for d in client.list_output_devices() {
         println!(
-            "  [{id}] {name}{default}\n       desc: {desc}\n       vol: {vol:.0}%  mute: {mute}",
+            "  [{id}] {name}{default}\n       desc: {desc}\n       ch: {ch}  vol: {vol:.0}%  mute: {mute}",
             id = d.id,
             name = d.name,
             default = if d.is_default { " (default)" } else { "" },
             desc = d.description.as_deref().unwrap_or("-"),
+            ch = d.channels,
             vol = d.volume * 100.0,
             mute = d.muted,
         );
@@ -28,11 +29,12 @@ async fn main() -> anyhow::Result<()> {
     println!("\n=== Input devices ===");
     for d in client.list_input_devices() {
         println!(
-            "  [{id}] {name}{default}\n       desc: {desc}\n       vol: {vol:.0}%  mute: {mute}",
+            "  [{id}] {name}{default}\n       desc: {desc}\n       ch: {ch}  vol: {vol:.0}%  mute: {mute}",
             id = d.id,
             name = d.name,
             default = if d.is_default { " (default)" } else { "" },
             desc = d.description.as_deref().unwrap_or("-"),
+            ch = d.channels,
             vol = d.volume * 100.0,
             mute = d.muted,
         );
@@ -40,16 +42,18 @@ async fn main() -> anyhow::Result<()> {
 
     if let Ok(dev) = client.default_output_device() {
         println!(
-            "\nDefault output: {} (vol {:.0}%)",
+            "\nDefault output: {} ({} ch, vol {:.0}%)",
             dev.name,
+            dev.channels,
             dev.volume * 100.0
         );
     }
 
     if let Ok(dev) = client.default_input_device() {
         println!(
-            "Default input:  {} (vol {:.0}%)",
+            "Default input:  {} ({} ch, vol {:.0}%)",
             dev.name,
+            dev.channels,
             dev.volume * 100.0
         );
     }

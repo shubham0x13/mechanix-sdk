@@ -15,11 +15,12 @@ async fn main() -> anyhow::Result<()> {
     println!("Output devices:\n");
     for d in &devices {
         println!(
-            "  [{id}] {name}{default}\n       {desc}\n       volume: {vol:.0}%  muted: {mute}\n",
+            "  [{id}] {name}{default}\n       {desc}\n       {ch} ch  volume: {vol:.0}%  muted: {mute}\n",
             id = d.id,
             name = d.name,
             default = if d.is_default { "  ← default" } else { "" },
             desc = d.description.as_deref().unwrap_or("(no description)"),
+            ch = d.channels,
             vol = d.volume * 100.0,
             mute = d.muted,
         );

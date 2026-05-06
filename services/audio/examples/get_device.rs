@@ -31,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
                     "Input (Source)"
                 }
             );
+            println!("  Channels    : {}", d.channels);
             println!("  Volume      : {:.0}%", d.volume * 100.0);
             println!("  Muted       : {}", d.muted);
             println!("  Default     : {}", d.is_default);
